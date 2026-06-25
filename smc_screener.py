@@ -9,6 +9,23 @@ SMC LuxTrend v1.0
   GH_REPO по умолчанию теперь mambaleylo/smc-luxtrend (раньше указывал на
   mambaleylo/smc-optimizer — пуш best-конфига без явного GH_REPO в .env
   улетал бы в чужой репозиторий).
+SMC LuxTrend v1.2
+- v1.2: аудит "не осталось ли других параметров от прошлого проекта".
+  Нашёл 2 вещи:
+  1) tl_mult/tl_method не пробрасывались в /chart_data (ручной просчёт на
+     вкладке "График" и кнопка "применить лучшие параметры к графику").
+     Бэктест в оптимизаторе их учитывал, а график при ре-прогоне тех же
+     параметров — нет (тихо подставлял дефолт 1.0/atr). Добавил их в
+     _chartExtra, applyBestToChart(), URL /chart_data и серверный парсинг
+     query-параметров — теперь график и оптимизатор считают одинаково.
+  2) internal_len/ob_filter/use_internal — да, это реальный мусор из
+     прошлого проекта (smc-optimizer v3.50, до форка). Уже убраны из
+     PARAM_SPACE тогда же — оптимизатор их не перебирает. Но в _simulate
+     ещё читаются как no-op (p.get(...,default), ни на что не влияют) и
+     до сих пор гоняются в JS/query-string ручного прогона графика —
+     чисто инертная труба без эффекта на результат, оставлена для
+     совместимости со старыми сохранёнными конфигами/JSON. Не трогал —
+     дай знать, если хочешь зачистить полностью.
 SMC LuxTrend v1.1
 - v1.1: Trendline filter приведён 1:1 к оригиналу LuxAlgo "Trendlines with
   Breaks" (исходник автора предоставлен пользователем). Три расхождения:
@@ -404,7 +421,7 @@ except ImportError:
     os.system(f"{sys.executable} -m pip install requests -q")
     import requests
 
-APP_VERSION  = "1.0"
+APP_VERSION  = "1.2"
 GATE_API     = "https://api.gateio.ws/api/v4"
 NUM_WORKERS  = max(1, (multiprocessing.cpu_count() or 2) - 1)
 
@@ -2596,7 +2613,7 @@ var _bestParams = null;
 var _autoAppliedAt30 = false;
 var _chartExtra = {internal_len:5, ob_filter:'atr', ob_mitigation:'highlow',
   fvg_enabled:true, fvg_threshold:0.1, choch_only:false, use_internal:true,
-  min_ob_size:1.0, require_fvg_confirm:false};
+  min_ob_size:1.0, require_fvg_confirm:false, tl_mult:1.0, tl_method:'atr'};
 var TF_SEC = {"1m":60,"5m":300,"15m":900,"30m":1800,"1h":3600,"4h":14400,"1d":86400};
 var _chartAutoTimer = null;
 var _monitorActive = false;
@@ -2633,6 +2650,8 @@ function applyBestToChart(){
     use_internal:       p.use_internal       != null ? p.use_internal       : true,
     min_ob_size:        p.min_ob_size        != null ? p.min_ob_size        : 1.0,
     require_fvg_confirm:p.require_fvg_confirm!= null ? p.require_fvg_confirm: false,
+    tl_mult:             p.tl_mult            != null ? p.tl_mult            : 1.0,
+    tl_method:           p.tl_method          != null ? p.tl_method          : 'atr',
   };
   // Переключаем вкладку надёжно — ищем кнопку по тексту
   var tabBtns = document.querySelectorAll('.tab');
@@ -3186,7 +3205,8 @@ function loadChart(auto){
     +'&internal_len='+ex.internal_len+'&ob_filter='+ex.ob_filter+'&ob_mitigation='+ex.ob_mitigation
     +'&fvg_enabled='+ex.fvg_enabled+'&fvg_threshold='+ex.fvg_threshold+'&choch_only='+ex.choch_only
     +'&use_internal='+ex.use_internal+'&min_ob_size='+ex.min_ob_size
-    +'&require_fvg_confirm='+ex.require_fvg_confirm;
+    +'&require_fvg_confirm='+ex.require_fvg_confirm
+    +'&tl_mult='+ex.tl_mult+'&tl_method='+ex.tl_method;
   fetch(url)
     .then(function(r){return r.json();}).then(function(d){
       if(d.error){cStatus('Ошибка: '+d.error);return;}
@@ -3853,6 +3873,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                  "use_internal": qb("use_internal", True),
                  "min_ob_size": float(qf("min_ob_size", 1.0)),
                  "require_fvg_confirm": qb("require_fvg_confirm", False),
+                 "tl_mult": float(qf("tl_mult", 1.0)),
+                 "tl_method": qf("tl_method", "atr"),
                  "sl_pct": sl_p, "tp_pct": tp_p}
             result = _simulate(candles, p, sl_pct=sl_p, tp_pct=tp_p, _collect=True)
             if not result:
