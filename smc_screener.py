@@ -9,6 +9,23 @@ SMC LuxTrend v1.0
   GH_REPO по умолчанию теперь mambaleylo/smc-luxtrend (раньше указывал на
   mambaleylo/smc-optimizer — пуш best-конфига без явного GH_REPO в .env
   улетал бы в чужой репозиторий).
+SMC LuxTrend v1.1
+- v1.1: Trendline filter приведён 1:1 к оригиналу LuxAlgo "Trendlines with
+  Breaks" (исходник автора предоставлен пользователем). Три расхождения:
+  1) Lookahead: пивот (ph[i]/pl[i]) использовался сразу на баре i, хотя
+     ta.pivothigh(length,length)/ta.pivotlow(length,length) у автора
+     подтверждается только через length баров после i. Теперь читаем
+     ph[i-swing_len]/pl[i-swing_len] — тот же класс бага, что уже чинили
+     в OB confirmed_i, просто эту ветку добавили позже и фикс не подхватил.
+  2) ATR для slope считался по периоду 200 (общий atr_arr, нужен для
+     SL/TP и размера OB) вместо ta.atr(length) у автора — теперь
+     отдельный atr_tl_arr = _atr(candles, swing_len).
+  3) tl_filter убран из PARAM_SPACE. У LuxAlgo нет переключателя
+     «включить/выключить сигнал» — индикатор всегда считает upos/dnos,
+     выключить можно было только отрисовку линий (на сигнал не влияет).
+     Фильтр пробоя трендлайна теперь всегда активен при входе в OB.
+  tl_mult и tl_method остаются в PARAM_SPACE — прямые аналоги настроек
+  индикатора Slope и Slope Calculation Method.
 SMC Optimizer v3.51
 - v3.51: Trendline filter (LuxAlgo-style).
   Новые параметры оптимизатора: tl_mult (slope multiplier, 0.5–3.0),
@@ -436,10 +453,8 @@ PARAM_SPACE = {
     # ── Trendline filter (LuxAlgo-style) ───────────────────────────────────
     # tl_mult: наклон трендлайна (slope multiplier, как в LuxAlgo)
     # tl_method: способ расчёта slope — atr / stdev / linreg
-    # tl_filter: требовать пробой трендлайна перед входом в OB
     "tl_mult":   {"min":0.5,  "max":3.0,  "step":0.1, "type":"float"},
     "tl_method": {"values":["atr","stdev","linreg"],        "type":"cat"},
-    "tl_filter": {"values":[False, True],                   "type":"bool"},
 }
 
 # ─── Глобальное состояние ───────────────────────────────────────────────────
@@ -1046,7 +1061,6 @@ def _simulate(candles, p, sl_pct=None, tp_pct=None, risk_pct=10.0,
     req_fvg       = p.get("require_fvg_confirm", False)
     tl_mult       = float(p.get("tl_mult", 1.0))
     tl_method     = p.get("tl_method", "atr")
-    tl_filter     = p.get("tl_filter", False)
 
     n = len(candles)
     min_bars = swing_len*2 + 20
@@ -1065,16 +1079,16 @@ def _simulate(candles, p, sl_pct=None, tp_pct=None, risk_pct=10.0,
     pl = _pivot_low(candles, swing_len)
     # internal_len/use_internal зарезервированы для будущей internal structure логики
 
-    # ── Trendlines (LuxAlgo-style) ──────────────────────────────────────────
-    # Slope = ATR/stdev/linreg * tl_mult / swing_len (как в LuxAlgo)
-    # upper трендлайн: строится через ph, убывает с наклоном slope_ph
-    # lower трендлайн: строится через pl, возрастает с наклоном slope_pl
-    # tl_upper[i] / tl_lower[i] — значение линии в баре i
-    # upos[i] = 1 если close > upper (breakout вверх), dnos[i] = 1 если close < lower
+    # ── Trendlines (LuxAlgo "Trendlines with Breaks", 1:1 порт) ────────────────
+    # length = swing_len (тот же лукбэк, что у свинг-пивотов)
+    # slope = ATR(length)/Stdev(length)/Linreg(length) / length * tl_mult
+    # ph/pl — центрированный пивот: result[k] физически подтверждается
+    # только на баре k+swing_len (как ta.pivothigh(length,length) у автора),
+    # поэтому здесь читаем ph[i-swing_len]/pl[i-swing_len], а НЕ ph[i] —
+    # иначе лукахед (тот же класс бага, что чинили в OB через confirmed_i).
+    atr_tl_arr = _atr(candles, swing_len)   # ATR(length), а не общий ATR(200)
     tl_upper = [0.0] * n
     tl_lower = [0.0] * n
-    tl_slope_ph = [0.0] * n   # текущий наклон верхней линии
-    tl_slope_pl = [0.0] * n   # текущий наклон нижней линии
     tl_upos  = [0] * n        # 1 = цена пробила верхнюю линию снизу вверх
     tl_dnos  = [0] * n        # 1 = цена пробила нижнюю линию сверху вниз
     _upper = 0.0; _lower = 0.0
@@ -1082,7 +1096,10 @@ def _simulate(candles, p, sl_pct=None, tp_pct=None, risk_pct=10.0,
     _upos  = 0;   _dnos  = 0
     for i in range(n):
         c = candles[i]
-        atr_i = atr_arr[i] or 0.001
+        atr_i = atr_tl_arr[i] or 0.001
+        confirmed_i = i - swing_len
+        ph_val = ph[confirmed_i] if confirmed_i >= 0 else None
+        pl_val = pl[confirmed_i] if confirmed_i >= 0 else None
         closes_slice = [candles[j]["close"] for j in range(max(0,i-swing_len+1), i+1)]
         ns = len(closes_slice)
         # slope calculation — точно как LuxAlgo
@@ -1103,28 +1120,29 @@ def _simulate(candles, p, sl_pct=None, tp_pct=None, risk_pct=10.0,
                 slope_i = atr_i / swing_len * tl_mult
         else:  # atr (default)
             slope_i = atr_i / swing_len * tl_mult
-        # обновляем slope при новом пивоте (confirmed_i смещение учтено ниже в основном цикле;
-        # здесь строим массив просто последовательно на каждом баре)
-        if ph[i] is not None:
+        # обновление линии — 1:1 как в Pine:
+        #   slope_ph := ph ? slope : slope_ph ;  upper := ph ? ph : upper - slope_ph
+        if ph_val is not None:
             _sph   = slope_i
-            _upper = ph[i]
+            _upper = ph_val
         else:
             _upper -= _sph
-        if pl[i] is not None:
+        if pl_val is not None:
             _spl   = slope_i
-            _lower = pl[i]
+            _lower = pl_val
         else:
             _lower += _spl
-        tl_upper[i] = _upper - _sph * swing_len  # значение без backpaint смещения
+        # real-time значение линии (без backpaint-смещения) — как
+        # "upper - slope_ph*length" в Pine, используется для upos/dnos
+        tl_upper[i] = _upper - _sph * swing_len
         tl_lower[i] = _lower + _spl * swing_len
-        tl_slope_ph[i] = _sph
-        tl_slope_pl[i] = _spl
-        # upos/dnos — накопительные флаги breakout
-        if ph[i] is not None:
+        # upos/dnos — накопительные флаги breakout (var в Pine: сбрасываются
+        # только на новом подтверждённом пивоте, иначе держат прошлое значение)
+        if ph_val is not None:
             _upos = 0
         elif c["close"] > tl_upper[i]:
             _upos = 1
-        if pl[i] is not None:
+        if pl_val is not None:
             _dnos = 0
         elif c["close"] < tl_lower[i]:
             _dnos = 1
@@ -1333,18 +1351,13 @@ def _simulate(candles, p, sl_pct=None, tp_pct=None, risk_pct=10.0,
         if sw_trend == 0:
             continue
 
-        # ── Trendline filter ─────────────────────────────────────────────────
-        # Если tl_filter=True: бычий вход разрешён только если цена недавно
-        # пробила нижнюю трендлайн (tl_upos==1 в текущем или предыдущих барах),
-        # шортовый вход — только если пробила верхнюю трендлайн вниз (tl_dnos==1).
-        # Логика идентична LuxAlgo: upos/dnos сбрасываются при новом пивоте
-        # и остаются 1 до следующего пивота — т.е. «breakout в последней волне».
-        if tl_filter:
-            tl_bull_ok = (tl_upos[i] == 1)   # close > upper trendline (пробой вверх)
-            tl_bear_ok = (tl_dnos[i] == 1)   # close < lower trendline (пробой вниз)
-        else:
-            tl_bull_ok = True
-            tl_bear_ok = True
+        # ── Trendline filter (LuxAlgo, всегда активен) ─────────────────────────
+        # Бычий вход разрешён только если цена пробила нижнюю трендлайн снизу
+        # вверх (tl_upos==1); шортовый — только если пробила верхнюю трендлайн
+        # сверху вниз (tl_dnos==1). upos/dnos держат «1» до следующего пивота —
+        # т.е. «breakout в последней волне», как в самом индикаторе LuxAlgo.
+        tl_bull_ok = (tl_upos[i] == 1)
+        tl_bear_ok = (tl_dnos[i] == 1)
 
         # Бычий сигнал: цена возвращается в бычий OB
         # choch_only=False: торгуем и BOS и CHoCH OBs
