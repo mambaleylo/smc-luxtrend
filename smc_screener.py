@@ -1082,7 +1082,7 @@ def _simulate(candles, p, sl_pct=None, tp_pct=None, risk_pct=10.0,
     _upos  = 0;   _dnos  = 0
     for i in range(n):
         c = candles[i]
-        atr_i = atr_arr[i] if atr_arr[i] > 0 else 0.001
+        atr_i = atr_arr[i] or 0.001
         closes_slice = [candles[j]["close"] for j in range(max(0,i-swing_len+1), i+1)]
         ns = len(closes_slice)
         # slope calculation — точно как LuxAlgo
