@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 """
+SMC LuxTrend v1.0
+- v1.0: проект отделён от базового smc-optimizer и переименован в smc-luxtrend
+  (репозиторий уже переименован на GitHub). Название "SMC Optimizer" в
+  заголовке страницы, стартовом логе и тестовом уведомлении заменено на
+  "SMC LuxTrend" — раньше совпадало с названием родительского проекта и
+  путало в логах/Telegram, какой именно скрипт сейчас запущен.
+  GH_REPO по умолчанию теперь mambaleylo/smc-luxtrend (раньше указывал на
+  mambaleylo/smc-optimizer — пуш best-конфига без явного GH_REPO в .env
+  улетал бы в чужой репозиторий).
 SMC Optimizer v3.51
 - v3.51: Trendline filter (LuxAlgo-style).
   Новые параметры оптимизатора: tl_mult (slope multiplier, 0.5–3.0),
@@ -386,7 +395,7 @@ NUM_WORKERS  = max(1, (multiprocessing.cpu_count() or 2) - 1)
 _worker_candles = None
 _worker_risk    = None
 PORT         = 8765
-GH_REPO      = os.environ.get("GH_REPO", "mambaleylo/smc-optimizer")
+GH_REPO      = os.environ.get("GH_REPO", "mambaleylo/smc-luxtrend")
 GH_TOKEN     = os.environ.get("GH_TOKEN", "")
 TG_TOKEN     = os.environ.get("TG_TOKEN", "")
 TG_CHAT      = os.environ.get("TG_CHAT", "")
@@ -1866,7 +1875,7 @@ def _test_alert():
     """Шлёт тестовое уведомление и честно проверяет, дошло ли оно."""
     if not ((TG_TOKEN and TG_CHAT) or NTFY_URL):
         return False, "Не заданы TG_TOKEN+TG_CHAT или NTFY_URL"
-    msg = "✅ SMC Optimizer: тестовое уведомление. Если ты это видишь — алерты настроены верно."
+    msg = "✅ SMC LuxTrend: тестовое уведомление. Если ты это видишь — алерты настроены верно."
     ok_any, errs = False, []
     if TG_TOKEN and TG_CHAT:
         try:
@@ -2291,7 +2300,7 @@ def run_screener():
 # ─── HTTP сервер ─────────────────────────────────────────────────────────────
 HTML = """<!DOCTYPE html><html lang="ru"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SMC Optimizer</title>
+<title>SMC LuxTrend</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0d0d0d;color:#e0e0e0;font-family:'JetBrains Mono',monospace,sans-serif;font-size:13px}
@@ -2399,7 +2408,7 @@ input,select{width:100%;background:#0d0d0d;border:1px solid #333;color:#e0e0e0;p
 </div>
 
 <div class="topbar">
-  <h1>&#9889; SMC Optimizer</h1>
+  <h1>&#9889; SMC LuxTrend</h1>
   <span class="ver" id="verBadge">v__VER__</span>
   <button class="btn btn-go" id="btnStart" onclick="startOpt()">&#9654; Старт</button>
   <button class="btn btn-stop" id="btnStop" onclick="stopOpt()" style="display:none">&#9632; Стоп</button>
@@ -4100,7 +4109,7 @@ def main():
     _load_last_symbol()
 
     server = http.server.ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    print(f"{_C_GRN}SMC Optimizer v{APP_VERSION} — http://0.0.0.0:{PORT}{_C_RST}", flush=True)
+    print(f"{_C_GRN}SMC LuxTrend v{APP_VERSION} — http://0.0.0.0:{PORT}{_C_RST}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
