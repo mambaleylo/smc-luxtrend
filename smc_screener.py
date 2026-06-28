@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """
-SMC LuxTrend v1.0
+SMC LuxTrend v1.3
+- v1.3: trendlines on chart (LuxAlgo "Trendlines with Breaks" 1:1).
+  Upper (red dashed) = down-trendline from swing highs; lower (teal dashed) = up-trendline
+  from swing lows. Breakout markers "B" appear on the bar where upos/dnos flip (same
+  signals already used as entry filter). tl_upper/tl_lower/tl_upos/tl_dnos now returned
+  by _simulate(_collect=True) and sent via /chart_data to the JS renderer.
 - v1.0: проект отделён от базового smc-optimizer и переименован в smc-luxtrend
   (репозиторий уже переименован на GitHub). Название "SMC Optimizer" в
   заголовке страницы, стартовом логе и тестовом уведомлении заменено на
@@ -421,7 +426,7 @@ except ImportError:
     os.system(f"{sys.executable} -m pip install requests -q")
     import requests
 
-APP_VERSION  = "1.2"
+APP_VERSION  = "1.3"
 GATE_API     = "https://api.gateio.ws/api/v4"
 NUM_WORKERS  = max(1, (multiprocessing.cpu_count() or 2) - 1)
 
