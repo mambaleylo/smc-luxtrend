@@ -3406,14 +3406,14 @@ function drawChart(){
       if(_up>_up_prev){ // upos rising edge = breakout above down-trendline
         var _y=toY(_cd[_i].l)-10;
         ctx2.fillStyle='rgba(8,153,129,0.9)';
-        ctx2.beginPath();ctx2.roundRect(_x-7,_y-10,14,14,3);ctx2.fill();
+        ctx2.fillRect(_x-7,_y-10,14,14);
         ctx2.fillStyle='#fff';ctx2.font='bold 8px monospace';ctx2.textAlign='center';
         ctx2.fillText('B',_x,_y);
       }
       if(_dn>_dn_prev){ // dnos rising edge = breakout below up-trendline
         var _y=toY(_cd[_i].h)+20;
         ctx2.fillStyle='rgba(242,54,69,0.9)';
-        ctx2.beginPath();ctx2.roundRect(_x-7,_y-10,14,14,3);ctx2.fill();
+        ctx2.fillRect(_x-7,_y-10,14,14);
         ctx2.fillStyle='#fff';ctx2.font='bold 8px monospace';ctx2.textAlign='center';
         ctx2.fillText('B',_x,_y);
       }
