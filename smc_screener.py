@@ -87,7 +87,7 @@ SMC Optimizer v3.50
   стагнация (no_improve >= 10) набралась на самом старте — логика по
   стагнации сохранена, просто добавлен нижний порог ECO_MIN_CYCLE=100.
   (4) Последняя прогоняемая пара теперь запоминается в
-  ~/.lux_last_symbol.json при каждом старте /scan и подхватывается при
+  ~/.smc_last_symbol.json при каждом старте /scan и подхватывается при
   следующем запуске сервера + подставляется в поля #sym/#cSym при загрузке
   страницы.
 SMC Optimizer v3.48.5
@@ -144,7 +144,7 @@ SMC Optimizer v3.47
   test-кусках (OOS — честная оценка без оверфита); (4) выбирается значение с
   лучшим средним OOS; (5) passes=2 прохода по всем весам для сходимости.
   Итоговые веса применяются глобально к FITNESS_WEIGHTS, сохраняются в
-  ~/.lux_fitness_weights.json и отображаются на слайдерах без перезапуска.
+  ~/.smc_fitness_weights.json и отображаются на слайдерах без перезапуска.
   Алерт в Telegram/ntfy по завершении. Прогресс и лог видны под кнопкой.
   Эндпоинты: GET /weight_tune_status, POST /weight_tune_start, POST /weight_tune_stop.
 - v3.46: опциональный авто-синк параметров авто-трейда с оптимизатором.
@@ -223,7 +223,7 @@ SMC Optimizer v3.43
   тюнить вклад каждого множителя в ранжирование конфигов отдельно. Например,
   если в найденном конфиге мало сделок — выкручиваешь "Кол-во" выше 1.0, и
   поиск начинает сильнее предпочитать конфиги с бо́льшим числом сделок.
-  Эндпоинты GET/POST /fitness_weights, сохранение в ~/.lux_fitness_weights.json.
+  Эндпоинты GET/POST /fitness_weights, сохранение в ~/.smc_fitness_weights.json.
   Применяется на ходу без остановки: одиночный оптимизатор и скрининг
   (main-процесс) читают актуальные веса при каждом вызове _simulate(); для
   ProcessPoolExecutor (соседи в локальном поиске считаются в отдельных
@@ -394,7 +394,7 @@ SMC Optimizer v3.43
   если ширина canvas равна 0, а по событию visibilitychange перерисовывает
   при возврате — убирает «мешанину» из накладывающихся рендеров.
 - v1.3: настройка алертов через UI (по аналогии с WickFill). Поля TG Token /
-  TG Chat ID / ntfy URL в сайдбаре, сохраняются в ~/.lux_alert_cfg.json
+  TG Chat ID / ntfy URL в сайдбаре, сохраняются в ~/.smc_alert_cfg.json
   (приоритет над env при старте) и подхватываются при перезапуске — больше
   не нужно экспортировать env-переменные руками каждый раз. Кнопка "Тест"
   реально проверяет доставку: для Telegram разбирает поле "ok" в ответе API
@@ -428,16 +428,16 @@ NUM_WORKERS  = max(1, (multiprocessing.cpu_count() or 2) - 1)
 # ─── Глобали воркера ProcessPool ────────────────────────────────────────────
 _worker_candles = None
 _worker_risk    = None
-PORT         = 8766
+PORT         = 8765
 GH_REPO      = os.environ.get("GH_REPO", "mambaleylo/smc-luxtrend")
 GH_TOKEN     = os.environ.get("GH_TOKEN", "")
 TG_TOKEN     = os.environ.get("TG_TOKEN", "")
 TG_CHAT      = os.environ.get("TG_CHAT", "")
 NTFY_URL     = os.environ.get("NTFY_URL", "")
-ALERT_CFG_PATH   = os.path.expanduser("~/.lux_alert_cfg.json")
-FITNESS_W_PATH   = os.path.expanduser("~/.lux_fitness_weights.json")
-GATE_CFG_PATH    = os.path.expanduser("~/.lux_gate_cfg.json")
-LAST_SYMBOL_PATH = os.path.expanduser("~/.lux_last_symbol.json")
+ALERT_CFG_PATH   = os.path.expanduser("~/.smc_alert_cfg.json")
+FITNESS_W_PATH   = os.path.expanduser("~/.smc_fitness_weights.json")
+GATE_CFG_PATH    = os.path.expanduser("~/.smc_gate_cfg.json")
+LAST_SYMBOL_PATH = os.path.expanduser("~/.smc_last_symbol.json")
 GATE_KEY         = os.environ.get("GATE_KEY", "")
 GATE_SECRET      = os.environ.get("GATE_SECRET", "")
 
@@ -1535,6 +1535,11 @@ def _simulate(candles, p, sl_pct=None, tp_pct=None, risk_pct=10.0,
         result["bear_obs"] = _box_end(coll_bear_obs, "bear")
         result["fvg_bull"] = _fvg_end(fvg_bull, "bull")
         result["fvg_bear"] = _fvg_end(fvg_bear, "bear")
+        # Trendlines for chart rendering (subsampled — every bar)
+        result["tl_upper"] = tl_upper
+        result["tl_lower"] = tl_lower
+        result["tl_upos"]  = tl_upos
+        result["tl_dnos"]  = tl_dnos
 
     return result
 
@@ -3179,6 +3184,7 @@ fetch('/opt_status').then(function(r){return r.json();}).then(function(d){
 
 /* ── Chart ── */
 var _cd=[], _sig=[], _obs_bull=[], _obs_bear=[], _fvg_bull=[], _fvg_bear=[];
+var _tl_upper=[], _tl_lower=[], _tl_upos=[], _tl_dnos=[];
 var _camStart=0, _camEnd=0, _drag=false, _dragX=0, _dragCam=0;
 var cv=document.getElementById('chartCanvas');
 var ctx2=cv.getContext('2d');
@@ -3216,6 +3222,8 @@ function loadChart(auto){
       // что и оптимизатор — это гарантирует совпадение с лучшим конфигом
       // и ограниченную (а не "до конца графика") протяжённость зон.
       _obs_bull=d.bull_obs||[]; _obs_bear=d.bear_obs||[];
+      _tl_upper=d.tl_upper||[]; _tl_lower=d.tl_lower||[];
+      _tl_upos=d.tl_upos||[]; _tl_dnos=d.tl_dnos||[];
       _fvg_bull=d.fvg_bull||[]; _fvg_bear=d.fvg_bear||[];
       if(!auto || anchorTs===null){
         _camStart=Math.max(0,_cd.length-80);
@@ -3292,6 +3300,8 @@ function drawChart(){
       if(sg.sl<mn)mn=sg.sl;if(sg.sl>mx)mx=sg.sl;
     }
   });
+  // Include visible trendline values in price range
+  if(_tl_upper.length){for(var _i=s;_i<=e;_i++){var _vu=_tl_upper[_i],_vl=_tl_lower[_i];if(_vu&&_vu>0){if(_vu<mn)mn=_vu;if(_vu>mx)mx=_vu;}if(_vl&&_vl>0){if(_vl<mn)mn=_vl;if(_vl>mx)mx=_vl;}}}
   var rng=mx-mn||1, pad2=rng*0.06;
   mn-=pad2;mx+=pad2;
   function toY(p){return PAD.t+cH*(1-(p-mn)/(mx-mn));}
@@ -3345,6 +3355,50 @@ function drawChart(){
     ctx2.fillStyle=bull?'rgba(38,166,154,0.85)':'rgba(239,83,80,0.85)';
     ctx2.fillRect(x-candleW/2,y1,candleW,Math.max(1,y2-y1));
   });
+  // ── Trendlines (LuxAlgo style) ─────────────────────────────────────────────
+  if(_tl_upper.length>e){
+    // Upper trendline (down-trendline, red/orange) — dashed
+    ctx2.strokeStyle='rgba(242,54,69,0.7)';ctx2.lineWidth=1.2;ctx2.setLineDash([6,3]);
+    ctx2.beginPath();var started=false;
+    for(var _i=s;_i<=e;_i++){
+      var _v=_tl_upper[_i];
+      if(!_v||_v<=0){started=false;continue;}
+      var _x=toX(_i),_y=toY(_v);
+      if(!started){ctx2.moveTo(_x,_y);started=true;}else{ctx2.lineTo(_x,_y);}
+    }
+    ctx2.stroke();
+    // Lower trendline (up-trendline, teal) — dashed
+    ctx2.strokeStyle='rgba(8,153,129,0.7)';ctx2.lineWidth=1.2;
+    ctx2.beginPath();started=false;
+    for(var _i=s;_i<=e;_i++){
+      var _v=_tl_lower[_i];
+      if(!_v||_v<=0){started=false;continue;}
+      var _x=toX(_i),_y=toY(_v);
+      if(!started){ctx2.moveTo(_x,_y);started=true;}else{ctx2.lineTo(_x,_y);}
+    }
+    ctx2.stroke();
+    ctx2.setLineDash([]);
+    // Breakout markers "B"
+    for(var _i=s;_i<=e;_i++){
+      var _up=_tl_upos[_i], _dn=_tl_dnos[_i];
+      var _up_prev=_i>0?_tl_upos[_i-1]:0, _dn_prev=_i>0?_tl_dnos[_i-1]:0;
+      var _x=toX(_i);
+      if(_up>_up_prev){ // upos rising edge = breakout above down-trendline
+        var _y=toY(_cd[_i].l)-10;
+        ctx2.fillStyle='rgba(8,153,129,0.9)';
+        ctx2.beginPath();ctx2.roundRect(_x-7,_y-10,14,14,3);ctx2.fill();
+        ctx2.fillStyle='#fff';ctx2.font='bold 8px monospace';ctx2.textAlign='center';
+        ctx2.fillText('B',_x,_y);
+      }
+      if(_dn>_dn_prev){ // dnos rising edge = breakout below up-trendline
+        var _y=toY(_cd[_i].h)+20;
+        ctx2.fillStyle='rgba(242,54,69,0.9)';
+        ctx2.beginPath();ctx2.roundRect(_x-7,_y-10,14,14,3);ctx2.fill();
+        ctx2.fillStyle='#fff';ctx2.font='bold 8px monospace';ctx2.textAlign='center';
+        ctx2.fillText('B',_x,_y);
+      }
+    }
+  }
   // ── Сигналы: только последний виден полностью, остальные — точка + тонкие линии
   var visibleSigs = _sig.filter(function(sg){return sg.entry_i>=s&&sg.entry_i<=e;});
   visibleSigs.forEach(function(sg, si){
@@ -3884,6 +3938,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._json({"candles": slim, "signals": result.get("signals",[]),
                         "bull_obs": result.get("bull_obs",[]), "bear_obs": result.get("bear_obs",[]),
                         "fvg_bull": result.get("fvg_bull",[]), "fvg_bear": result.get("fvg_bear",[]),
+                        "tl_upper": result.get("tl_upper",[]), "tl_lower": result.get("tl_lower",[]),
+                        "tl_upos": result.get("tl_upos",[]), "tl_dnos": result.get("tl_dnos",[]),
                         "metrics": {k:result[k] for k in ("trades","winrate","profit_factor","max_dd","total_return","fitness","rr")}})
         elif self.path == "/gate_cfg":
             self._json({"gate_key": GATE_KEY[:4]+"***" if GATE_KEY else "",
