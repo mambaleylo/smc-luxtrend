@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """
+SMC LuxTrend v1.4
+- v1.4: режим «Только TL» — сигналы по пробою трендлайна без OB/FVG.
+  Кнопка SMC+TL / ⚡ Только TL в панели графика переключает режим на лету.
+  tl_only добавлен в PARAM_SPACE — оптимизатор перебирает оба режима.
 SMC LuxTrend v1.3
 - v1.3: trendlines on chart (LuxAlgo "Trendlines with Breaks" 1:1).
   Upper (red dashed) = down-trendline from swing highs; lower (teal dashed) = up-trendline
@@ -426,7 +430,7 @@ except ImportError:
     os.system(f"{sys.executable} -m pip install requests -q")
     import requests
 
-APP_VERSION  = "1.3"
+APP_VERSION  = "1.4"
 GATE_API     = "https://api.gateio.ws/api/v4"
 NUM_WORKERS  = max(1, (multiprocessing.cpu_count() or 2) - 1)
 
@@ -2569,6 +2573,7 @@ input,select{width:100%;background:#0d0d0d;border:1px solid #333;color:#e0e0e0;p
     <label>SL%<input id="cSl" type="number" value="0.8" step="0.1" style="width:60px"></label>
     <label>TP%<input id="cTp" type="number" value="1.6" step="0.1" style="width:60px"></label>
     <button class="btn btn-go" onclick="loadChart()" style="align-self:flex-end">Загрузить</button>
+    <button id="btnTlMode" onclick="toggleTlMode()" style="align-self:flex-end;padding:6px 10px;border-radius:6px;border:1px solid #444;background:#1a1a2e;color:#7ab3e0;font-size:11px;cursor:pointer">SMC+TL</button>
     <button class="btn" id="monBtn" onclick="toggleChartMonitor()" style="align-self:flex-end">🔔 Алерты</button>
     <button class="btn" id="atBtn" onclick="toggleAutoTrade()" style="align-self:flex-end;background:#1a3a5c">🤖 Авто</button>
   </div>
@@ -2610,10 +2615,12 @@ input,select{width:100%;background:#0d0d0d;border:1px solid #333;color:#e0e0e0;p
   <div class="chart-legend">
     <span><i style="background:#089981"></i>Long</span>
     <span><i style="background:#F23645"></i>Short</span>
-    <span><i style="background:rgba(49,121,245,0.3);border:1px solid #3179f5"></i>Bull OB</span>
-    <span><i style="background:rgba(247,124,128,0.3);border:1px solid #f77c80"></i>Bear OB</span>
-    <span><i style="background:rgba(0,255,104,0.2);border:1px solid #0f9"></i>FVG Bull</span>
-    <span><i style="background:rgba(255,0,8,0.15);border:1px solid #f45"></i>FVG Bear</span>
+    <span id="legOB"><i style="background:rgba(49,121,245,0.3);border:1px solid #3179f5"></i>Bull OB</span>
+    <span id="legOBb"><i style="background:rgba(247,124,128,0.3);border:1px solid #f77c80"></i>Bear OB</span>
+    <span id="legFVG"><i style="background:rgba(0,255,104,0.2);border:1px solid #0f9"></i>FVG Bull</span>
+    <span id="legFVGb"><i style="background:rgba(255,0,8,0.15);border:1px solid #f45"></i>FVG Bear</span>
+    <span><i style="background:rgba(8,153,129,0.7)"></i>TL↑</span>
+    <span><i style="background:rgba(242,54,69,0.7)"></i>TL↓</span>
   </div>
   <canvas id="chartCanvas"></canvas>
   <div id="chartMetrics"></div>
@@ -3217,7 +3224,7 @@ function loadChart(auto){
     +'&fvg_enabled='+ex.fvg_enabled+'&fvg_threshold='+ex.fvg_threshold+'&choch_only='+ex.choch_only
     +'&use_internal='+ex.use_internal+'&min_ob_size='+ex.min_ob_size
     +'&require_fvg_confirm='+ex.require_fvg_confirm
-    +'&tl_mult='+ex.tl_mult+'&tl_method='+ex.tl_method;
+    +'&tl_only='+ex.tl_only+'&tl_mult='+ex.tl_mult+'&tl_method='+ex.tl_method;
   fetch(url)
     .then(function(r){return r.json();}).then(function(d){
       if(d.error){cStatus('Ошибка: '+d.error);return;}
@@ -3280,6 +3287,14 @@ function scheduleAutoRefresh(tf){
   }, 1000);
 }
 
+function toggleTlMode(){
+  _chartExtra.tl_only = !_chartExtra.tl_only;
+  var btn=document.getElementById('btnTlMode');
+  btn.textContent=_chartExtra.tl_only?'⚡ Только TL':'SMC+TL';
+  btn.style.color=_chartExtra.tl_only?'#f0b800':'#7ab3e0';
+  btn.style.borderColor=_chartExtra.tl_only?'#f0b800':'#444';
+  loadChart();
+}
 function drawChart(){
   if(!_cd.length)return;
   var dpr=window.devicePixelRatio||1;
@@ -3932,6 +3947,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                  "use_internal": qb("use_internal", True),
                  "min_ob_size": float(qf("min_ob_size", 1.0)),
                  "require_fvg_confirm": qb("require_fvg_confirm", False),
+                 "tl_only": qb("tl_only", False),
                  "tl_mult": float(qf("tl_mult", 1.0)),
                  "tl_method": qf("tl_method", "atr"),
                  "sl_pct": sl_p, "tp_pct": tp_p}
