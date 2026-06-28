@@ -87,7 +87,7 @@ SMC Optimizer v3.50
   стагнация (no_improve >= 10) набралась на самом старте — логика по
   стагнации сохранена, просто добавлен нижний порог ECO_MIN_CYCLE=100.
   (4) Последняя прогоняемая пара теперь запоминается в
-  ~/.smc_last_symbol.json при каждом старте /scan и подхватывается при
+  ~/.lux_last_symbol.json при каждом старте /scan и подхватывается при
   следующем запуске сервера + подставляется в поля #sym/#cSym при загрузке
   страницы.
 SMC Optimizer v3.48.5
@@ -144,7 +144,7 @@ SMC Optimizer v3.47
   test-кусках (OOS — честная оценка без оверфита); (4) выбирается значение с
   лучшим средним OOS; (5) passes=2 прохода по всем весам для сходимости.
   Итоговые веса применяются глобально к FITNESS_WEIGHTS, сохраняются в
-  ~/.smc_fitness_weights.json и отображаются на слайдерах без перезапуска.
+  ~/.lux_fitness_weights.json и отображаются на слайдерах без перезапуска.
   Алерт в Telegram/ntfy по завершении. Прогресс и лог видны под кнопкой.
   Эндпоинты: GET /weight_tune_status, POST /weight_tune_start, POST /weight_tune_stop.
 - v3.46: опциональный авто-синк параметров авто-трейда с оптимизатором.
@@ -223,7 +223,7 @@ SMC Optimizer v3.43
   тюнить вклад каждого множителя в ранжирование конфигов отдельно. Например,
   если в найденном конфиге мало сделок — выкручиваешь "Кол-во" выше 1.0, и
   поиск начинает сильнее предпочитать конфиги с бо́льшим числом сделок.
-  Эндпоинты GET/POST /fitness_weights, сохранение в ~/.smc_fitness_weights.json.
+  Эндпоинты GET/POST /fitness_weights, сохранение в ~/.lux_fitness_weights.json.
   Применяется на ходу без остановки: одиночный оптимизатор и скрининг
   (main-процесс) читают актуальные веса при каждом вызове _simulate(); для
   ProcessPoolExecutor (соседи в локальном поиске считаются в отдельных
@@ -394,7 +394,7 @@ SMC Optimizer v3.43
   если ширина canvas равна 0, а по событию visibilitychange перерисовывает
   при возврате — убирает «мешанину» из накладывающихся рендеров.
 - v1.3: настройка алертов через UI (по аналогии с WickFill). Поля TG Token /
-  TG Chat ID / ntfy URL в сайдбаре, сохраняются в ~/.smc_alert_cfg.json
+  TG Chat ID / ntfy URL в сайдбаре, сохраняются в ~/.lux_alert_cfg.json
   (приоритет над env при старте) и подхватываются при перезапуске — больше
   не нужно экспортировать env-переменные руками каждый раз. Кнопка "Тест"
   реально проверяет доставку: для Telegram разбирает поле "ok" в ответе API
@@ -428,16 +428,16 @@ NUM_WORKERS  = max(1, (multiprocessing.cpu_count() or 2) - 1)
 # ─── Глобали воркера ProcessPool ────────────────────────────────────────────
 _worker_candles = None
 _worker_risk    = None
-PORT         = 8765
+PORT         = 8766
 GH_REPO      = os.environ.get("GH_REPO", "mambaleylo/smc-luxtrend")
 GH_TOKEN     = os.environ.get("GH_TOKEN", "")
 TG_TOKEN     = os.environ.get("TG_TOKEN", "")
 TG_CHAT      = os.environ.get("TG_CHAT", "")
 NTFY_URL     = os.environ.get("NTFY_URL", "")
-ALERT_CFG_PATH   = os.path.expanduser("~/.smc_alert_cfg.json")
-FITNESS_W_PATH   = os.path.expanduser("~/.smc_fitness_weights.json")
-GATE_CFG_PATH    = os.path.expanduser("~/.smc_gate_cfg.json")
-LAST_SYMBOL_PATH = os.path.expanduser("~/.smc_last_symbol.json")
+ALERT_CFG_PATH   = os.path.expanduser("~/.lux_alert_cfg.json")
+FITNESS_W_PATH   = os.path.expanduser("~/.lux_fitness_weights.json")
+GATE_CFG_PATH    = os.path.expanduser("~/.lux_gate_cfg.json")
+LAST_SYMBOL_PATH = os.path.expanduser("~/.lux_last_symbol.json")
 GATE_KEY         = os.environ.get("GATE_KEY", "")
 GATE_SECRET      = os.environ.get("GATE_SECRET", "")
 
